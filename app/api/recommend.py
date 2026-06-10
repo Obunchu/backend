@@ -1,13 +1,19 @@
 import io
+import os
+import httpx
 from fastapi import APIRouter, File, UploadFile, HTTPException
 from PIL import Image
 from pillow_heif import register_heif_opener
 from app.models.inference import extract_embedding
 from app.db.database import get_db
+from dotenv import load_dotenv
 
+load_dotenv()
 register_heif_opener()
 
 router = APIRouter()
+
+TOUR_API_KEY = os.getenv("TOUR_API_KEY")
 
 @router.post("/recommend")
 async def recommend(file: UploadFile = File(...), top_k: int = 5):
@@ -15,7 +21,6 @@ async def recommend(file: UploadFile = File(...), top_k: int = 5):
     이미지를 받아 유사한 한국 관광지 top_k개를 반환합니다.
     """
 
-    print(f"받은 파일: {file.filename}, 타입: {file.content_type}")
     try:
         contents = await file.read()
         image = Image.open(io.BytesIO(contents)).convert("RGB")
@@ -66,7 +71,6 @@ async def recommend(file: UploadFile = File(...), top_k: int = 5):
         traceback.print_exc()  # ← 이 줄 추가
         raise HTTPException(status_code=500, detail=f"DB 오류: {str(ex)}")
     
-    # 4. 결과 직렬화
     results = []
     for row in rows:
         results.append({
@@ -81,8 +85,32 @@ async def recommend(file: UploadFile = File(...), top_k: int = 5):
             "primary_mood":   row[8],
             "secondary_mood": row[9],
             "caption":        row[10],
-            "content_id":     int(row[11]) if row[11] is not None else None,  # ← 수정
-            "similarity":     round(float(row[12]) * 100, 1),  # % 로 변환
+            "content_id":     int(row[11]) if row[11] is not None else None,
+            "similarity":     round(float(row[12]) * 100, 1),
         })
+
+
+    async with httpx.AsyncClient() as client:
+        for item in results:
+            content_id = item.get("content_id")
+            if not content_id:
+                continue
+            try:
+                url = (
+                    f"https://apis.data.go.kr/B551011/KorService2/detailCommon2"
+                    f"?serviceKey={TOUR_API_KEY}"
+                    f"&contentId={content_id}&MobileOS=ETC&MobileApp=5MinRec&_type=json"
+                )
+                res = await client.get(url)
+                data = res.json()
+
+                tour_item = data["response"]["body"]["items"]["item"][0]
+                item["firstimage"] = tour_item.get("firstimage", None)
+                item["overview"]   = tour_item.get("overview", None)
+            
+            except Exception as e:
+                print(f"공공API 오류 ({content_id}): {e}")
+                item["firstimage"] = None
+                item["overview"]   = None
 
     return {"results": results}

@@ -1,0 +1,81 @@
+import os
+import httpx
+from fastapi import APIRouter
+from app.db.database import get_db
+from pydantic import BaseModel
+from dotenv import load_dotenv
+
+load_dotenv()
+
+TOUR_API_KEY = os.getenv("TOUR_API_KEY")
+router = APIRouter()
+
+class BookmarkRequest(BaseModel):
+    user_id: str
+    content_id: int
+    place_name: str
+
+@router.get("/bookmarks/find")
+async def get_bookmarks(user_id: str):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT place_name, content_id, created_at 
+        FROM bookmarks
+        WHERE user_id = %s
+        ORDER BY created_at DESC
+        """, (user_id, )
+    )
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    results = []
+    for row in rows:
+        results.append({
+            "place_name": row[0],
+            "content_id": row[1],
+            "created_at": str(row[2])
+        })
+
+    async with httpx.AsyncClient() as client:
+        for item in results:
+            content_id = item.get("content_id")
+            if not content_id:
+                continue
+            try:
+                url = (
+                    f"https://apis.data.go.kr/B551011/KorService2/detailCommon2"
+                    f"?serviceKey={TOUR_API_KEY}"
+                    f"&contentId={content_id}&MobileOS=ETC&MobileApp=5MinRec&_type=json"
+                )
+                res = await client.get(url)
+                data = res.json()
+
+                tour_item = data["response"]["body"]["items"]["item"][0]
+                item["firstimage"] = tour_item.get("firstimage", None)
+            
+            except Exception as e:
+                print(f"공공API 오류 ({content_id}): {e}")
+                item["firstimage"]   = None
+
+    return {"results": results}
+
+@router.post("/bookmarks/add")
+async def add_bookmark(req: BookmarkRequest):
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            INSERT INTO bookmarks (user_id, content_id, place_name)
+            VALUES (%s, %s, %s)
+            """,
+            (req.user_id, req.content_id, req.place_name)
+        )
+        conn.commit()
+    finally:
+        cursor.close()
+        conn.close()
+    return {"ok": True}

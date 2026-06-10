@@ -5,6 +5,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.models.inference import load_models
 from app.api.recommend import router as recommend_router
+from app.api.signup import router as signup_router
+from app.api.login import router as login_router
+from app.api.places import router as places_router
+from app.api.bookmarks import router as bookmarks_router
+
 from contextlib import asynccontextmanager
 
 # .env 로드
@@ -25,6 +30,10 @@ app.add_middleware(
 )
 
 app.include_router(recommend_router)
+app.include_router(signup_router)
+app.include_router(login_router)
+app.include_router(places_router)
+app.include_router(bookmarks_router)
  
 @app.get("/")
 def root():
