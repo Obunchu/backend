@@ -15,6 +15,13 @@ class BookmarkRequest(BaseModel):
     content_id: int
     place_name: str
 
+class ViewRequest(BaseModel):
+    content_id: int
+
+class bookmarkStatusRequest(BaseModel):
+    user_id: str
+    content_id: int
+
 @router.get("/bookmarks/find")
 async def get_bookmarks(user_id: str):
     conn = get_db()
@@ -79,3 +86,60 @@ async def add_bookmark(req: BookmarkRequest):
         cursor.close()
         conn.close()
     return {"ok": True}
+
+@router.post("/bookmarks/remove")
+async def check_bookmark(req: bookmarkStatusRequest):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        DELETE FROM bookmarks
+        WHERE user_id = %s
+        AND content_id = %s
+    """, (req.user_id, req.content_id))
+
+    conn.commit()
+
+    cursor.close()
+    conn.close()
+
+    return {"success": True}
+
+
+@router.post("/bookmarks/count")
+async def add_views(req: ViewRequest):
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM bookmarks
+        WHERE content_id = %s
+    """, (req.content_id,))
+
+    row = cursor.fetchone()
+
+    cursor.close()
+    conn.close()
+
+    return {"count": row[0]}
+
+@router.post("/bookmarks/check")
+async def check_bookmark(req: bookmarkStatusRequest):
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM bookmarks
+        WHERE user_id = %s
+        AND content_id = %s
+    """, (req.user_id, req.content_id))
+
+    row = cursor.fetchone()
+
+    cursor.close()
+    conn.close()
+
+    return {
+        "is_bookmarked": row[0] > 0
+    }

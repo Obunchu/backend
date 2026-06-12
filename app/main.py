@@ -9,6 +9,8 @@ from app.api.signup import router as signup_router
 from app.api.login import router as login_router
 from app.api.places import router as places_router
 from app.api.bookmarks import router as bookmarks_router
+from app.api.views import router as views_router
+from app.api.detail import router as detail_router
 
 from contextlib import asynccontextmanager
 
@@ -34,7 +36,9 @@ app.include_router(signup_router)
 app.include_router(login_router)
 app.include_router(places_router)
 app.include_router(bookmarks_router)
- 
+app.include_router(views_router)
+app.include_router(detail_router)
+
 @app.get("/")
 def root():
     return {"message": "5MinRec API is running!"}
