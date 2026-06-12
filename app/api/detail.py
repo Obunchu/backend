@@ -11,40 +11,48 @@ load_dotenv()
 TOUR_API_KEY = os.getenv("TOUR_API_KEY")
 router = APIRouter()
 
-# 반복되는 공공 API 호출 로직을 하나의 헬퍼 함수로 통일하여 관리합니다.
 async def fetch_tour_extra_info(client: httpx.AsyncClient, item: dict):
     content_id = item.get("content_id")
     if not content_id:
         item["firstimage"] = None
         item["overview"] = None
+        item["addr1"] = None
         return item
 
     try:
-        # firstImageYN, overviewYN, addrinfoYN 필수 파라미터 세팅 확인
-        url = (
-            f"https://apis.data.go.kr/B551011/KorService2/detailCommon2"
-            f"?serviceKey={TOUR_API_KEY}"
-            f"&contentId={content_id}&MobileOS=ETC&MobileApp=5MinRec&_type=json"
-            f"&firstImageYN=Y&overviewYN=Y&addrinfoYN=Y"
-        )
-        res = await client.get(url, timeout=4.0)
+        url = "https://apis.data.go.kr/B551011/KorService2/detailCommon2"
+        params = {
+            "serviceKey": TOUR_API_KEY, 
+            "contentId": content_id,
+            "MobileOS": "ETC",
+            "MobileApp": "5MinRec",
+            "_type": "json",
+        }
         
+        res = await client.get(url, params=params, timeout=5.0)
+                
         if res.status_code == 200:
             data = res.json()
-            items_wrapper = data.get("response", {}).get("body", {}).get("items", {})
+            
+            response_obj = data.get("response", {})
+            header = response_obj.get("header", {})
+
+            body = response_obj.get("body", {})
+            items_wrapper = body.get("items", {})
             
             if items_wrapper and "item" in items_wrapper:
                 tour_item = items_wrapper["item"][0]
-                item["firstimage"] = tour_item.get("firstimage", None) or tour_item.get("firstimage2", None)
-                item["overview"] = tour_item.get("overview", None)
-                item["addr1"] = tour_item.get("addr1", None)
+                item["firstimage"] = tour_item.get("firstimage") or tour_item.get("firstimage2") or None
+                item["overview"] = tour_item.get("overview") or None
+                item["addr1"] = tour_item.get("addr1") or None
                 return item
+                
     except Exception as e:
         print(f"공공API 오류 (content_id: {content_id}): {e}")
     
-    # 실패 시 기본값 fallback
     item["firstimage"] = None
     item["overview"] = None
+    item["addr1"] = None
     return item
 
 @router.get("/detail/get")
@@ -70,7 +78,6 @@ async def get_tour_detail(content_id: int):
             detail="관광지를 찾을 수 없습니다."
         )
     
-    # 수정 포인트: 검증된 헬퍼 함수 fetch_tour_extra_info를 공통으로 사용하여 이미지 누락 해결
     async with httpx.AsyncClient() as client:
         result = await fetch_tour_extra_info(client, result)
 

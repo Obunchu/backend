@@ -112,14 +112,17 @@ async def recommend(file: UploadFile = File(...), top_k: int = 5):
                 continue
             try:
                 # detail/search 에서 사용했던 필수 파라미터(&firstImageYN=Y&overviewYN=Y&addrinfoYN=Y) 적용
-                url = (
-                    f"https://apis.data.go.kr/B551011/KorService2/detailCommon2"
-                    f"?serviceKey={TOUR_API_KEY}"
-                    f"&contentId={content_id}&MobileOS=ETC&MobileApp=5MinRec&_type=json"
-                    f"&firstImageYN=Y&overviewYN=Y&addrinfoYN=Y"
-                )
-                res = await client.get(url, timeout=4.0)
-                
+                url = "https://apis.data.go.kr/B551011/KorService2/detailCommon2"
+                params = {
+                    "serviceKey": TOUR_API_KEY, # 디코딩된 키인지 인코딩된 키인지 꼭 확인하세요! 보통 디코딩 키가 httpx에서 잘 먹힙니다.
+                    "contentId": content_id,
+                    "MobileOS": "ETC",
+                    "MobileApp": "5MinRec",
+                    "_type": "json",
+                }
+
+                res = await client.get(url, params=params, timeout=5.0)
+                                
                 if res.status_code == 200:
                     data = res.json()
                     body_data = data.get("response", {}).get("body", {})

@@ -43,7 +43,9 @@ async def get_bookmarks(user_id: str):
         results.append({
             "place_name": row[0],
             "content_id": row[1],
-            "created_at": str(row[2])
+            "created_at": str(row[2]),
+            "firstimage": None, 
+            "addr1": None      
         })
 
     async with httpx.AsyncClient() as client:
@@ -52,22 +54,31 @@ async def get_bookmarks(user_id: str):
             if not content_id:
                 continue
             try:
-                url = (
-                    f"https://apis.data.go.kr/B551011/KorService2/detailCommon2"
-                    f"?serviceKey={TOUR_API_KEY}"
-                    f"&contentId={content_id}&MobileOS=ETC&MobileApp=5MinRec&_type=json"
-                )
-                res = await client.get(url)
+                url = "https://apis.data.go.kr/B551011/KorService2/detailCommon2"
+                params = {
+                    "serviceKey": TOUR_API_KEY, 
+                    "contentId": content_id,
+                    "MobileOS": "ETC",
+                    "MobileApp": "5MinRec",
+                    "_type": "json",
+                }
+
+                res = await client.get(url, params=params, timeout=5.0)
                 data = res.json()
 
-                tour_item = data["response"]["body"]["items"]["item"][0]
-                item["firstimage"] = tour_item.get("firstimage", None)
+                items_container = data.get("response", {}).get("body", {}).get("items", {})
+                if items_container and "item" in items_container:
+                    tour_item = items_container["item"][0]
+                    item["firstimage"] = tour_item.get("firstimage", None)
+                    item["addr1"] = tour_item.get("addr1", None) 
             
             except Exception as e:
                 print(f"공공API 오류 ({content_id}): {e}")
-                item["firstimage"]   = None
+                item["firstimage"] = None
+                item["addr1"] = None
 
     return {"results": results}
+
 
 @router.post("/bookmarks/add")
 async def add_bookmark(req: BookmarkRequest):
